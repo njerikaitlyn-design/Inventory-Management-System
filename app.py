@@ -115,5 +115,36 @@ def search_external():
     except ExternalAPIError as error:
         return jsonify({"error": str(error)}), 502
     
+@app.route("/inventory/import", methods=["POST"])
+def import_item():
+    data = request.get_json()
+
+    if not data or "barcode" not in data:
+        return jsonify({"error": "barcode is required"}), 400
+
+    try:
+        product = fetch_product_by_barcode(data["barcode"])
+    except ExternalAPIError as error:
+        return jsonify({"error": str(error)}), 502
+
+    if product is None:
+        return jsonify({"error": "Product not found"}), 404
+
+    new_id = max((item["id"] for item in inventory), default=0) + 1
+
+    new_item = {
+        "id": new_id,
+        "barcode": product["barcode"],
+        "product_name": product["product_name"],
+        "brands": product["brands"],
+        "ingredients_text": product["ingredients_text"],
+        "price": data.get("price", 0),
+        "stock": data.get("stock", 0),
+    }
+
+    inventory.append(new_item)
+    return jsonify(new_item), 201
+   
+    
 if __name__ == "__main__":
     app.run(debug=True)
