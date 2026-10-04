@@ -1,5 +1,12 @@
 from flask import Flask, jsonify, request
 
+from openfoodfacts import (
+    fetch_product_by_barcode,
+    search_products_by_name,
+    ExternalAPIError,
+)
+
+
 app = Flask(__name__)
 
 inventory = [
@@ -88,5 +95,25 @@ def delete_item(item_id):
 
     return jsonify({"error": "Item not found"}), 404
 
+@app.route("/search", methods=["GET"])
+def search_external():
+    barcode = request.args.get("barcode")
+    name = request.args.get("name")
+
+    if not barcode and not name:
+        return jsonify({"error": "Provide a barcode or a name"}), 400
+
+    try:
+        if barcode:
+            product = fetch_product_by_barcode(barcode)
+            if product is None:
+                return jsonify({"error": "Product not found"}), 404
+            return jsonify(product), 200
+
+        results = search_products_by_name(name)
+        return jsonify(results), 200
+    except ExternalAPIError as error:
+        return jsonify({"error": str(error)}), 502
+    
 if __name__ == "__main__":
     app.run(debug=True)
