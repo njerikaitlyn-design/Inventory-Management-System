@@ -107,4 +107,81 @@ def test_delete_item(client):
 
 def test_delete_missing_item(client):
     response = client.delete("/inventory/99")
-    assert response.status_code == 404       
+    assert response.status_code == 404     
+
+FAKE_PRODUCT = {
+    "barcode": "333",
+    "product_name": "Mock Product",
+    "brands": "MockCo",
+    "ingredients_text": "mock ingredients",
+}
+
+
+@patch("app.fetch_product_by_barcode")
+def test_search_by_barcode(mock_fetch, client):
+    mock_fetch.return_value = FAKE_PRODUCT
+    response = client.get("/search?barcode=333")
+    assert response.status_code == 200
+    assert response.get_json()["product_name"] == "Mock Product"
+    mock_fetch.assert_called_once_with("333")
+
+
+@patch("app.fetch_product_by_barcode")
+def test_search_barcode_not_found(mock_fetch, client):
+    mock_fetch.return_value = None
+    response = client.get("/search?barcode=000")
+    assert response.status_code == 404
+
+
+@patch("app.search_products_by_name")
+def test_search_by_name(mock_search, client):
+    mock_search.return_value = [FAKE_PRODUCT]
+    response = client.get("/search?name=mock")
+    assert response.status_code == 200
+    assert len(response.get_json()) == 1
+
+
+def test_search_without_parameters(client):
+    response = client.get("/search")
+    assert response.status_code == 400
+
+
+@patch("app.fetch_product_by_barcode")
+def test_search_api_failure(mock_fetch, client):
+    mock_fetch.side_effect = ExternalAPIError("API down")
+    response = client.get("/search?barcode=333")
+    assert response.status_code == 502
+
+
+@patch("app.fetch_product_by_barcode")
+def test_import_item(mock_fetch, client):
+    mock_fetch.return_value = FAKE_PRODUCT
+    response = client.post(
+        "/inventory/import",
+        json={"barcode": "333", "price": 6.5, "stock": 8},
+    )
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data["product_name"] == "Mock Product"
+    assert data["price"] == 6.5
+    assert data["stock"] == 8
+    assert len(client.get("/inventory").get_json()) == 3
+
+
+@patch("app.fetch_product_by_barcode")
+def test_import_product_not_found(mock_fetch, client):
+    mock_fetch.return_value = None
+    response = client.post("/inventory/import", json={"barcode": "000"})
+    assert response.status_code == 404
+
+
+def test_import_without_barcode(client):
+    response = client.post("/inventory/import", json={"price": 5})
+    assert response.status_code == 400
+
+
+@patch("app.fetch_product_by_barcode")
+def test_import_api_failure(mock_fetch, client):
+    mock_fetch.side_effect = ExternalAPIError("API down")
+    response = client.post("/inventory/import", json={"barcode": "333"})
+    assert response.status_code == 502      
