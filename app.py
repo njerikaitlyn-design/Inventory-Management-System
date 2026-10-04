@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -37,6 +37,28 @@ def get_item(item_id):
 @app.route("/")
 def home():
     return jsonify({"message": "Inventory API is running"}), 200
+
+@app.route("/inventory", methods=["POST"])
+def add_item():
+    data = request.get_json()
+
+    if not data or "product_name" not in data:
+        return jsonify({"error": "product_name is required"}), 400
+
+    new_id = max((item["id"] for item in inventory), default=0) + 1
+
+    new_item = {
+        "id": new_id,
+        "barcode": data.get("barcode", ""),
+        "product_name": data["product_name"],
+        "brands": data.get("brands", ""),
+        "ingredients_text": data.get("ingredients_text", ""),
+        "price": data.get("price", 0),
+        "stock": data.get("stock", 0),
+    }
+
+    inventory.append(new_item)
+    return jsonify(new_item), 201
 
 if __name__ == "__main__":
     app.run(debug=True)
