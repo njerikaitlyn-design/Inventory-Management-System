@@ -1,5 +1,12 @@
 from flask import Flask, jsonify, request
 
+from openfoodfacts import (
+    fetch_product_by_barcode,
+    search_products_by_name,
+    ExternalAPIError,
+)
+
+
 app = Flask(__name__)
 
 inventory = [
@@ -88,5 +95,56 @@ def delete_item(item_id):
 
     return jsonify({"error": "Item not found"}), 404
 
+@app.route("/search", methods=["GET"])
+def search_external():
+    barcode = request.args.get("barcode")
+    name = request.args.get("name")
+
+    if not barcode and not name:
+        return jsonify({"error": "Provide a barcode or a name"}), 400
+
+    try:
+        if barcode:
+            product = fetch_product_by_barcode(barcode)
+            if product is None:
+                return jsonify({"error": "Product not found"}), 404
+            return jsonify(product), 200
+
+        results = search_products_by_name(name)
+        return jsonify(results), 200
+    except ExternalAPIError as error:
+        return jsonify({"error": str(error)}), 502
+    
+@app.route("/inventory/import", methods=["POST"])
+def import_item():
+    data = request.get_json()
+
+    if not data or "barcode" not in data:
+        return jsonify({"error": "barcode is required"}), 400
+
+    try:
+        product = fetch_product_by_barcode(data["barcode"])
+    except ExternalAPIError as error:
+        return jsonify({"error": str(error)}), 502
+
+    if product is None:
+        return jsonify({"error": "Product not found"}), 404
+
+    new_id = max((item["id"] for item in inventory), default=0) + 1
+
+    new_item = {
+        "id": new_id,
+        "barcode": product["barcode"],
+        "product_name": product["product_name"],
+        "brands": product["brands"],
+        "ingredients_text": product["ingredients_text"],
+        "price": data.get("price", 0),
+        "stock": data.get("stock", 0),
+    }
+
+    inventory.append(new_item)
+    return jsonify(new_item), 201
+   
+    
 if __name__ == "__main__":
     app.run(debug=True)
