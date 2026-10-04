@@ -60,5 +60,33 @@ def add_item():
     inventory.append(new_item)
     return jsonify(new_item), 201
 
+@app.route("/inventory/<int:item_id>", methods=["PATCH"])
+def update_item(item_id):
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    allowed_fields = ["barcode", "product_name", "brands",
+                      "ingredients_text", "price", "stock"]
+
+    for item in inventory:
+        if item["id"] == item_id:
+            for field in allowed_fields:
+                if field in data:
+                    item[field] = data[field]
+            return jsonify(item), 200
+
+    return jsonify({"error": "Item not found"}), 404
+
+@app.route("/inventory/<int:item_id>", methods=["DELETE"])
+def delete_item(item_id):
+    for item in inventory:
+        if item["id"] == item_id:
+            inventory.remove(item)
+            return jsonify({"message": "Item deleted"}), 200
+
+    return jsonify({"error": "Item not found"}), 404
+
 if __name__ == "__main__":
     app.run(debug=True)
